@@ -1,0 +1,8 @@
+/target
+/Driver
+/geo
+client-config.toml
+*.py
+*.exe
+*.md
+!readme.md
