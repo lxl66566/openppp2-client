@@ -16,6 +16,10 @@ log = "0.4.21"
 env_logger = "0.11.3"
 serde = { version = "1.0.198", features = ["derive"] }
 toml = "0.8.12"
+zstd = "0.13.1"
+
+[build-dependencies]
+zstd = "0.13.1"
 
 
 [profile.release]

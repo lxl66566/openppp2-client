@@ -55,7 +55,6 @@ impl Default for Config {
                 "--tun-vnet=yes",
                 "--block-quic=yes",
                 "--set-http-proxy=no",
-                "--dns-rules=direct-list.txt",
             ]
             .into_iter()
             .map(|s| s.to_string())
@@ -64,7 +63,8 @@ impl Default for Config {
     }
 }
 
-/// Read config from CONFIG_FILE, if config file not found, create a default config.
+/// Read config from CONFIG_FILE, if config file not found, create a default
+/// config.
 pub fn read() -> std::io::Result<Config> {
     let file = File::open(CONFIG_FILE);
     let mut file = match file {

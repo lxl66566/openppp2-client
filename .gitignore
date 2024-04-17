@@ -2,6 +2,7 @@
 /Driver
 /geo
 client-config.toml
+direct-list.zst
 *.py
 *.exe
 *.md

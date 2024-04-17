@@ -5,9 +5,11 @@ mod client_config;
 use colored::Colorize;
 use die_exit::DieWith;
 use log::{debug, info};
+use std::fs::{self, File};
+use std::io::{Cursor, Write};
 use std::path::Path;
 use std::process::Command;
-use std::{env, fs, path::PathBuf};
+use std::{env, path::PathBuf};
 
 fn main() -> std::io::Result<()> {
     env_logger::init();
@@ -124,10 +126,14 @@ fn select(items: &[String]) -> usize {
 fn run(config_path: &Path, args: &[String]) {
     debug_assert!(config_path.exists());
     let mut command = Command::new("ppp");
-    let mut args: Vec<&String> = args.iter().collect();
-    let arg_config = format!("--config={}", config_path.to_string_lossy());
-    args.push(&arg_config);
+    let args: Vec<&String> = args.iter().collect();
+
     command.args(&args);
+    command.arg(format!("--config={}", config_path.to_string_lossy()));
+    if let Ok(direct_list) = write_direct_list() {
+        command.arg(format!("--dns-rules={}", direct_list.to_string_lossy()));
+    }
+
     info!("Running: `{:?}`", command);
     let status = command.spawn();
 
@@ -135,15 +141,18 @@ fn run(config_path: &Path, args: &[String]) {
     if let Err(e) = status
         && e.kind() == std::io::ErrorKind::NotFound
     {
-        let mut command = if cfg!(windows) {
+        let mut new_command = if cfg!(windows) {
             info!("exe not found, try cmd");
             Command::new("ppp.cmd")
         } else {
             info!("ppp not found, try sh");
             Command::new("ppp.sh")
         };
-        command
-            .args(args)
+
+        command.get_args().for_each(|arg| {
+            new_command.arg(arg);
+        });
+        new_command
             .spawn()
             .die_with(|err| format!("Failed to start command: {}", err));
     }
@@ -152,6 +161,15 @@ fn run(config_path: &Path, args: &[String]) {
 /// make a permanent tempdir.
 fn temp_dir() -> std::io::Result<PathBuf> {
     let path = env::temp_dir().join("openppp2");
-    fs::create_dir(&path)?;
+    fs::create_dir_all(&path)?;
+    Ok(path)
+}
+
+fn write_direct_list() -> std::io::Result<PathBuf> {
+    let compressed_bytes = include_bytes!(concat!(env!("OUT_DIR"), "/direct-list.zst"));
+    let decoded = zstd::stream::decode_all(Cursor::new(compressed_bytes)).unwrap();
+    let path = temp_dir()?.join("direct-list.txt");
+    let mut file = File::create(&path)?;
+    file.write_all(&decoded)?;
     Ok(path)
 }
