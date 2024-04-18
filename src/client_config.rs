@@ -1,6 +1,7 @@
 use die_exit::Die;
 use serde::{Deserialize, Serialize};
 use std::{
+    env::current_dir,
     fs::File,
     io::{Read, Write},
     path::PathBuf,
@@ -75,7 +76,7 @@ pub fn read() -> std::io::Result<Config> {
                 return Err(e);
             }
             let temp = Config::default();
-            let mut f = File::create(CONFIG_FILE)?;
+            let mut f = File::create(current_dir()?.join(CONFIG_FILE))?;
             f.write_all(
                 toml::to_string(&temp)
                     .expect("default config must to_string successfully.")

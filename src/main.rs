@@ -17,7 +17,7 @@ fn main() -> std::io::Result<()> {
     let (json_files, mut file_names) = read_openppp2_settings(&config.config_dirs)?;
     file_names.insert(0, "Default".to_string());
     let selected_index = select(&file_names);
-    debug!("selected_index: {}", selected_index);
+    debug!("selected_index: {:?}", selected_index);
 
     // cannot use tempdir: openppp will read config after few seconds. At that time
     // the config json will be deleted, cause openppp2 panic.
@@ -25,10 +25,10 @@ fn main() -> std::io::Result<()> {
 
     // selected `Default`
     let config_path = match selected_index {
-        0 => {
+        Some(0) => {
             let defaults_string: Vec<String> =
                 config.defaults.iter().map(|x| x.to_string()).collect();
-            let selected_index = select(&defaults_string);
+            let selected_index = select(&defaults_string).unwrap_or_else(|| std::process::exit(0));
             let select_ip_and_port = config
                 .defaults
                 .get(selected_index)
@@ -44,13 +44,12 @@ fn main() -> std::io::Result<()> {
             )?;
             defaults_file
         }
-        _ => {
-            let selected_file_path = json_files
-                .get(selected_index - 1)
-                .expect("The index must be valid.");
-            let file_name = file_names
-                .get(selected_index - 1)
-                .expect("The index must be valid.");
+        None => {
+            std::process::exit(0);
+        }
+        Some(index) => {
+            let selected_file_path = json_files.get(index - 1).expect("The index must be valid.");
+            let file_name = file_names.get(index - 1).expect("The index must be valid.");
             info!(
                 "selected file: {}, path: {}",
                 file_name,
@@ -105,21 +104,28 @@ fn default_settings(ip: &str, port: u16) -> json::JsonValue {
 }
 
 /// Returns the index of selected item.
-fn select(items: &[String]) -> usize {
-    use terminal_menu::{button, label, menu, mut_menu, run};
+fn select(items: &[String]) -> Option<usize> {
+    use terminal_menu::{back_button, button, label, menu, mut_menu, run};
     let mut menu_items = vec![label(
         "Please select the config you want to use:"
             .bold()
             .to_string(),
     )];
-    menu_items.reserve(items.len() + 1);
+    menu_items.reserve(items.len() + 2);
     items.iter().map(button).for_each(|x| menu_items.push(x));
+    menu_items.push(back_button("Exit"));
     let select_menu = menu(menu_items);
     run(&select_menu);
     let temp = mut_menu(&select_menu);
     let selected = temp.selected_item_index();
     info!("selected: {}", temp.selected_item_name());
-    selected - 1 // The returned index start with 1 !!
+
+    // The returned index start with 1 !!
+    if temp.selected_item_name() != "Exit" {
+        Some(selected - 1)
+    } else {
+        None
+    }
 }
 
 /// run openppp2 with given config file and other args.
