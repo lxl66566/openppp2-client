@@ -1,13 +1,20 @@
-use die_exit::Die;
-use serde::{Deserialize, Serialize};
 use std::{
-    env::current_dir,
-    fs::File,
+    fs::{self, File},
     io::{Read, Write},
     path::PathBuf,
+    sync::LazyLock as Lazy,
 };
 
-pub static CONFIG_FILE: &str = "client-config.toml";
+use die_exit::Die;
+use home::home_dir;
+use serde::{Deserialize, Serialize};
+
+pub static CONFIG_FILE: Lazy<PathBuf> = Lazy::new(|| {
+    home_dir()
+        .unwrap_or(PathBuf::from("."))
+        .join(".config")
+        .join(env!("CARGO_PKG_NAME").to_string() + ".toml")
+});
 
 /// The config for openppp2 client.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -46,7 +53,13 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             defaults: vec![Defaults::default()],
-            config_dirs: vec![PathBuf::from(".")],
+            config_dirs: vec![
+                PathBuf::from("."),
+                CONFIG_FILE
+                    .parent()
+                    .expect("builtin config file must have a parent directory.")
+                    .to_path_buf(),
+            ],
             args: vec![
                 "--mode=client",
                 "--tun-ip=10.0.0.2",
@@ -67,7 +80,7 @@ impl Default for Config {
 /// Read config from CONFIG_FILE, if config file not found, create a default
 /// config.
 pub fn read() -> std::io::Result<Config> {
-    let file = File::open(CONFIG_FILE);
+    let file = File::open(CONFIG_FILE.as_path());
     let mut file = match file {
         Ok(f) => f,
         Err(e) => {
@@ -76,7 +89,8 @@ pub fn read() -> std::io::Result<Config> {
                 return Err(e);
             }
             let temp = Config::default();
-            let mut f = File::create(current_dir()?.join(CONFIG_FILE))?;
+            fs::create_dir_all(CONFIG_FILE.parent().unwrap())?;
+            let mut f = File::create(CONFIG_FILE.as_path())?;
             f.write_all(
                 toml::to_string(&temp)
                     .expect("default config must to_string successfully.")

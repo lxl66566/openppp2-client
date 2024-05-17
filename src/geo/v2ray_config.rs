@@ -58,13 +58,13 @@ pub mod domain {
     #[repr(i32)]
     pub enum Type {
         /// The value is used as is.
-        Plain = 0,
+        Plain  = 0,
         /// The value is used as a regular expression.
-        Regex = 1,
+        Regex  = 1,
         /// The value is a root domain.
         Domain = 2,
         /// The value is a domain.
-        Full = 3,
+        Full   = 3,
     }
 }
 /// IP for routing decision, in CIDR form.
@@ -114,13 +114,14 @@ pub struct RoutingRule {
     #[prost(message, repeated, tag = "3")]
     pub cidr: ::prost::alloc::vec::Vec<Cidr>,
     /// List of GeoIPs for target IP address matching. If this entry exists, the
-    /// cidr above will have no effect. GeoIP fields with the same country code are
-    /// supposed to contain exactly same content. They will be merged during
-    /// runtime. For customized GeoIPs, please leave country code empty.
+    /// cidr above will have no effect. GeoIP fields with the same country code
+    /// are supposed to contain exactly same content. They will be merged
+    /// during runtime. For customized GeoIPs, please leave country code
+    /// empty.
     #[prost(message, repeated, tag = "10")]
     pub geoip: ::prost::alloc::vec::Vec<GeoIp>,
-    /// A range of port [from, to]. If the destination port is in this range, this
-    /// rule takes effect. Deprecated. Use port_list.
+    /// A range of port [from, to]. If the destination port is in this range,
+    /// this rule takes effect. Deprecated. Use port_list.
     #[deprecated]
     #[prost(message, optional, tag = "4")]
     pub port_range: ::core::option::Option<PortRange>,
@@ -195,21 +196,21 @@ pub mod config {
     #[repr(i32)]
     pub enum DomainStrategy {
         /// Use domain as is.
-        AsIs = 0,
+        AsIs         = 0,
         /// Always resolve IP for domains.
-        UseIp = 1,
+        UseIp        = 1,
         /// Resolve to IP if the domain doesn't match any rules.
         IpIfNonMatch = 2,
         /// Resolve to IP if any rule requires IP matching.
-        IpOnDemand = 3,
+        IpOnDemand   = 3,
     }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
 pub enum Network {
     Unknown = 0,
-    RawTcp = 1,
-    Tcp = 2,
-    Udp = 3,
-    Unix = 4,
+    RawTcp  = 1,
+    Tcp     = 2,
+    Udp     = 3,
+    Unix    = 4,
 }

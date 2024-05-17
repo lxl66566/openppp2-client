@@ -1,15 +1,19 @@
 #![feature(let_chains)]
+#![feature(lazy_cell)]
 
 mod client_config;
+
+use std::{
+    env,
+    fs::{self, File},
+    io::{Cursor, Write},
+    path::{Path, PathBuf},
+    process::Command,
+};
 
 use colored::Colorize;
 use die_exit::DieWith;
 use log::{debug, info};
-use std::fs::{self, File};
-use std::io::{Cursor, Write};
-use std::path::Path;
-use std::process::Command;
-use std::{env, path::PathBuf};
 
 fn main() -> std::io::Result<()> {
     env_logger::init();
@@ -158,9 +162,8 @@ fn run(config_path: &Path, args: &[String]) {
         command.get_args().for_each(|arg| {
             new_command.arg(arg);
         });
-        new_command
-            .spawn()
-            .die_with(|err| format!("Failed to start command: {}", err));
+        let res = new_command.spawn();
+        res.die_with(|err| format!("Failed to start command: {}", err));
     }
 }
 

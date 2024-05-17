@@ -1,6 +1,6 @@
 [package]
-name = "ppp-client"
-version = "0.1.1"
+name = "openppp2-client"
+version = "0.1.2"
 edition = "2021"
 
 [dependencies]
@@ -17,10 +17,14 @@ env_logger = "0.11.3"
 serde = { version = "1.0.198", features = ["derive"] }
 toml = "0.8.12"
 zstd = "0.13.1"
+home = "0.5.9"
 
 [build-dependencies]
 zstd = "0.13.1"
 
+[[bin]]
+name = "ppp-client"
+path = "src/main.rs"
 
 [profile.release]
 opt-level = "z"
