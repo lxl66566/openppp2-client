@@ -3,18 +3,19 @@ pub mod client_config;
 pub mod utils;
 
 use std::{
-    env,
-    fs::{self, File},
+    env, fs,
+    fs::File,
     io::{Cursor, Write},
     path::{Path, PathBuf},
     process::Command,
 };
 
+use anyhow::Context;
+use assert2::assert;
 use cli::CLI;
 use client_config::{ClientConfig, DefaultConfigItem, DEFAULT_CLIENT_CONFIG_PATH};
 use colored::Colorize;
 use config_file2::{LoadConfigFile, StoreConfigFile};
-use die_exit::DieWith;
 use log::{debug, info, warn};
 use once_fn::once;
 use path_absolutize::Absolutize;
@@ -42,15 +43,13 @@ fn main() -> anyhow::Result<()> {
     // If provide the use param
     if let Some(subcommand) = &CLI.subcommand {
         match subcommand {
-            cli::SubCommand::Use { default, config } => {
-                if let Some(default) = default {
-                    let default = DefaultConfigItem::from(default.as_str());
-                    let config_path = dumped_default_settings(default.ip.as_str(), default.port);
-                    run(&config_path, &client_config.args);
-                } else if let Some(config) = config {
-                    run(config, &client_config.args);
+            cli::SubCommand::Use { config } => {
+                if let Some(config_item) = DefaultConfigItem::parse(config) {
+                    let config_path =
+                        dumped_default_settings(config_item.ip.as_str(), config_item.port);
+                    run(&config_path, &client_config.args)?;
                 } else {
-                    unreachable!("must provide either default or config")
+                    run(Path::new(config), &client_config.args)?;
                 }
             }
         }
@@ -96,8 +95,7 @@ fn main() -> anyhow::Result<()> {
         }
     };
     debug!("use config file: {}", config_path.display());
-    run(&config_path, &client_config.args);
-    Ok(())
+    run(&config_path, &client_config.args)
 }
 
 /// Returns all config files and their names in the given config dirs.
@@ -118,6 +116,8 @@ fn read_openppp2_settings(config_dirs: &[PathBuf]) -> anyhow::Result<Vec<(PathBu
     Ok(output)
 }
 
+/// Returns the default settings value for openppp2.
+#[inline]
 fn default_settings(ip: &str, port: u16) -> json::JsonValue {
     let mut json = json::parse(include_str!("../appsettings.json")).unwrap();
     let ip_and_port = format!("{ip}:{port}");
@@ -126,6 +126,11 @@ fn default_settings(ip: &str, port: u16) -> json::JsonValue {
     json
 }
 
+/// Dump the default settings value for openppp2 to a temp file.
+///
+/// # Returns
+///
+/// The path of the dumped file.
 fn dumped_default_settings(ip: &str, port: u16) -> PathBuf {
     let defaults_file = temp_dir().join("Default.json");
     fs::write(&defaults_file, default_settings(ip, port).dump())
@@ -158,9 +163,13 @@ fn select(items: &[String]) -> Option<usize> {
     }
 }
 
-/// run openppp2 with given config file and other args.
-fn run(config_path: &Path, args: &[String]) {
-    debug_assert!(config_path.exists());
+/// run openppp2 with given config file and running args.
+fn run(config_path: &Path, args: &[String]) -> anyhow::Result<()> {
+    assert!(
+        fs::exists(config_path).context("cannot access config file")?,
+        "config file `{:?}` not found",
+        config_path
+    );
     let content = fs::read_to_string(config_path).expect("read config file failed");
     debug!("config file content: {}", content);
 
@@ -188,16 +197,13 @@ fn run(config_path: &Path, args: &[String]) {
         command.get_args().for_each(|arg| {
             new_command.arg(arg);
         });
-        let status = new_command
-            .spawn()
-            .die_with(|err| format!("Failed to start command: {}", err))
-            .wait()
-            .die_with(|err| format!("Failed to execute command: {}", err));
+        let status = new_command.spawn()?.wait()?;
         info!("running status: {:?}", status);
     }
+    Ok(())
 }
 
-/// make a permanent tempdir.
+/// make a permanent tempdir and return its path.
 #[once]
 fn temp_dir() -> PathBuf {
     let path = env::temp_dir().join("openppp2");
@@ -205,6 +211,7 @@ fn temp_dir() -> PathBuf {
     path
 }
 
+/// Write the direct-list.txt to a temp file.
 fn write_direct_list() -> std::io::Result<PathBuf> {
     let compressed_bytes = include_bytes!(concat!(env!("OUT_DIR"), "/direct-list.zst"));
     let decoded = zstd::stream::decode_all(Cursor::new(compressed_bytes)).unwrap();

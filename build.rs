@@ -3,6 +3,7 @@ use std::{env, fs::File, io::Write, path::Path};
 use zstd::stream::write::Encoder;
 
 fn main() {
+    println!("cargo:rerun-if-changed=build.rs,direct-list.txt");
     let out_dir = env::var("OUT_DIR").unwrap();
     let dest_path = Path::new(&out_dir).join("direct-list.zst");
 

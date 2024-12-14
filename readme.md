@@ -36,7 +36,14 @@ ip = "127.0.0.1"
 port = 2888
 ```
 
-如果你不想看到 TUI 面板而希望通过命令行直接启动 openppp2，请查看帮助。`openppp2-client -h`
+如果你不想看到 TUI 面板而希望通过命令行直接启动 openppp2：
+
+```sh
+openppp2-client use 127.0.0.1:2777          # 使用默认配置，只需要提供 ip 与端口即可
+openppp2-client use openppp2-client.json    # 使用自定义配置文件
+```
+
+更多使用方法，请参考 `openppp2-client -h`。
 
 ## TODO
 

@@ -26,6 +26,32 @@ pub struct DefaultConfigItem {
     pub port: u16,
 }
 
+impl DefaultConfigItem {
+    /// Parse the string to DefaultConfigItem.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use openppp2_client::client_config::DefaultConfigItem;
+    ///
+    /// let item = DefaultConfigItem::parse("127.0.0.1:2777").unwrap();
+    /// assert_eq!(item.name, "undefined");
+    /// assert_eq!(item.ip, "127.0.0.1");
+    /// assert_eq!(item.port, 2777);
+    /// assert!(DefaultConfigItem::parse("asdf").is_none());
+    /// ```
+    pub fn parse(s: impl AsRef<str>) -> Option<Self> {
+        let mut split = s.as_ref().trim_matches('/').split(':');
+        let ip = split.next()?.to_string();
+        let port = split.next()?.parse().ok()?;
+        Some(Self {
+            name: "undefined".to_string(),
+            ip,
+            port,
+        })
+    }
+}
+
 /// An example for Defaults.
 impl Default for DefaultConfigItem {
     fn default() -> Self {
@@ -40,23 +66,6 @@ impl Default for DefaultConfigItem {
 impl std::fmt::Display for DefaultConfigItem {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}, {}:{}", self.name, self.ip, self.port)
-    }
-}
-
-impl From<&str> for DefaultConfigItem {
-    fn from(s: &str) -> Self {
-        let mut split = s.trim_matches('/').split(':');
-        let ip = split.next().expect("invalid ip").to_string();
-        let port = split
-            .next()
-            .expect("invalid port")
-            .parse()
-            .expect("port must be a number");
-        Self {
-            name: "undefined".to_string(),
-            ip,
-            port,
-        }
     }
 }
 

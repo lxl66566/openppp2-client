@@ -1,14 +1,14 @@
 [package]
 edition = "2021"
 name    = "openppp2-client"
-version = "0.2.0"
+version = "0.2.1"
 
 [dependencies]
 anyhow            = "1.0.94"
+assert2           = "0.3.15"
 clap              = { version = "4.5.23", features = ["derive"] }
 colored           = "2.1.0"
 config-file2      = "0.4.0"
-die-exit          = { version = "0.5.0", features = ["red"] }
 glob              = "0.3.1"
 home              = "0.5.9"
 json              = "0.12.4"
