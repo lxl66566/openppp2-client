@@ -1,7 +1,6 @@
-#![feature(let_chains)]
-#![feature(lazy_cell)]
-
-mod client_config;
+pub mod cli;
+pub mod client_config;
+pub mod utils;
 
 use std::{
     env,
@@ -11,29 +10,68 @@ use std::{
     process::Command,
 };
 
+use cli::CLI;
+use client_config::{ClientConfig, DefaultConfigItem, DEFAULT_CLIENT_CONFIG_PATH};
 use colored::Colorize;
+use config_file2::{LoadConfigFile, StoreConfigFile};
 use die_exit::DieWith;
-use log::{debug, info};
+use log::{debug, info, warn};
+use once_fn::once;
+use path_absolutize::Absolutize;
+use utils::Unzip;
 
-fn main() -> std::io::Result<()> {
-    env_logger::init();
-    let config = client_config::read()?;
-    let (json_files, mut file_names) = read_openppp2_settings(&config.config_dirs)?;
+fn main() -> anyhow::Result<()> {
+    utils::log_init();
+    let config = ClientConfig::load(
+        CLI.config
+            .as_deref()
+            .unwrap_or(DEFAULT_CLIENT_CONFIG_PATH.as_path()),
+    )?;
+    // Get the config, otherwise store one to the default path.
+    let client_config = config.unwrap_or_else(|| {
+        warn!(
+            "config file not found, use default config and write to {:?}.",
+            DEFAULT_CLIENT_CONFIG_PATH
+        );
+        ClientConfig::default()
+            .store(DEFAULT_CLIENT_CONFIG_PATH.as_path())
+            .expect("store default config failed");
+        ClientConfig::default()
+    });
+
+    // If provide the use param
+    if let Some(subcommand) = &CLI.subcommand {
+        match subcommand {
+            cli::SubCommand::Use { default, config } => {
+                if let Some(default) = default {
+                    let default = DefaultConfigItem::from(default.as_str());
+                    let config_path = dumped_default_settings(default.ip.as_str(), default.port);
+                    run(&config_path, &client_config.args);
+                } else if let Some(config) = config {
+                    run(config, &client_config.args);
+                } else {
+                    unreachable!("must provide either default or config")
+                }
+            }
+        }
+        return Ok(());
+    }
+
+    let (json_files, mut file_names) = read_openppp2_settings(&client_config.config_dirs)?.unzip();
     file_names.insert(0, "Default".to_string());
     let selected_index = select(&file_names);
     debug!("selected_index: {:?}", selected_index);
 
-    // cannot use tempdir: openppp will read config after few seconds. At that time
-    // the config json will be deleted, cause openppp2 panic.
-    let temp_dir = temp_dir()?;
-
-    // selected `Default`
     let config_path = match selected_index {
+        // selected `Default`
         Some(0) => {
-            let defaults_string: Vec<String> =
-                config.defaults.iter().map(|x| x.to_string()).collect();
+            let defaults_string: Vec<String> = client_config
+                .defaults
+                .iter()
+                .map(|x| x.to_string())
+                .collect();
             let selected_index = select(&defaults_string).unwrap_or_else(|| std::process::exit(0));
-            let select_ip_and_port = config
+            let select_ip_and_port = client_config
                 .defaults
                 .get(selected_index)
                 .expect("the selected index must be valid");
@@ -41,12 +79,7 @@ fn main() -> std::io::Result<()> {
                 "default select index: {}, ip and port: {}",
                 selected_index, select_ip_and_port
             );
-            let defaults_file = temp_dir.join("Default.json");
-            fs::write(
-                &defaults_file,
-                default_settings(select_ip_and_port.ip.as_str(), select_ip_and_port.port).dump(),
-            )?;
-            defaults_file
+            dumped_default_settings(select_ip_and_port.ip.as_str(), select_ip_and_port.port)
         }
         None => {
             std::process::exit(0);
@@ -63,40 +96,26 @@ fn main() -> std::io::Result<()> {
         }
     };
     debug!("use config file: {}", config_path.display());
-    run(&config_path, &config.args);
+    run(&config_path, &client_config.args);
     Ok(())
 }
 
-/// Returns openppp2 config json vec and filename vec.
-fn read_openppp2_settings(config_dirs: &[PathBuf]) -> std::io::Result<(Vec<PathBuf>, Vec<String>)> {
-    let mut json_files: Vec<PathBuf> = Vec::new();
-    let mut file_names: Vec<String> = Vec::new();
-    for dir in config_dirs {
-        for entry in fs::read_dir(dir)? {
+/// Returns all config files and their names in the given config dirs.
+fn read_openppp2_settings(config_dirs: &[PathBuf]) -> anyhow::Result<Vec<(PathBuf, String)>> {
+    let mut output = vec![];
+    for config_dir in config_dirs {
+        let dir_full_path = config_dir.absolutize()?;
+        for entry in glob::glob(&format!("{}/*.json", config_dir.to_string_lossy()))? {
             let entry = entry?;
-            if let Some(ext) = entry.path().extension()
-                && ext == "json"
-            {
-                let file_name = entry.file_name().to_string_lossy().into_owned();
-                if file_names.contains(&file_name)
-                    && let Some(parent_dir) = entry.path().parent()
-                {
-                    let parent_dir_name = parent_dir
-                        .file_name()
-                        .unwrap()
-                        .to_string_lossy()
-                        .into_owned();
-                    let new_file_name = format!("{}/{}", parent_dir_name, file_name);
-                    file_names.push(new_file_name);
-                } else {
-                    file_names.push(file_name);
-                }
-                json_files.push(entry.path());
-            }
+            let entry_full_path = entry.absolutize()?;
+            let name = entry_full_path
+                .strip_prefix(&dir_full_path)?
+                .to_string_lossy()
+                .into_owned();
+            output.push((entry_full_path.into_owned(), name));
         }
     }
-    debug_assert_eq!(json_files.len(), file_names.len());
-    Ok((json_files, file_names))
+    Ok(output)
 }
 
 fn default_settings(ip: &str, port: u16) -> json::JsonValue {
@@ -107,7 +126,14 @@ fn default_settings(ip: &str, port: u16) -> json::JsonValue {
     json
 }
 
-/// Returns the index of selected item.
+fn dumped_default_settings(ip: &str, port: u16) -> PathBuf {
+    let defaults_file = temp_dir().join("Default.json");
+    fs::write(&defaults_file, default_settings(ip, port).dump())
+        .expect("write default settings failed");
+    defaults_file
+}
+
+/// Returns the index of selected item. If select `Exit`, return None.
 fn select(items: &[String]) -> Option<usize> {
     use terminal_menu::{back_button, button, label, menu, mut_menu, run};
     let mut menu_items = vec![label(
@@ -122,7 +148,7 @@ fn select(items: &[String]) -> Option<usize> {
     run(&select_menu);
     let temp = mut_menu(&select_menu);
     let selected = temp.selected_item_index();
-    info!("selected: {}", temp.selected_item_name());
+    debug!("selected: {}", temp.selected_item_name());
 
     // The returned index start with 1 !!
     if temp.selected_item_name() != "Exit" {
@@ -135,9 +161,11 @@ fn select(items: &[String]) -> Option<usize> {
 /// run openppp2 with given config file and other args.
 fn run(config_path: &Path, args: &[String]) {
     debug_assert!(config_path.exists());
+    let content = fs::read_to_string(config_path).expect("read config file failed");
+    debug!("config file content: {}", content);
+
     let mut command = Command::new("ppp");
     let args: Vec<&String> = args.iter().collect();
-
     command.args(&args);
     command.arg(format!("--config={}", config_path.to_string_lossy()));
     if let Ok(direct_list) = write_direct_list() {
@@ -148,9 +176,7 @@ fn run(config_path: &Path, args: &[String]) {
     let status = command.spawn();
 
     // if NotFound, try other extension.
-    if let Err(e) = status
-        && e.kind() == std::io::ErrorKind::NotFound
-    {
+    if status.is_err() && status.unwrap_err().kind() == std::io::ErrorKind::NotFound {
         let mut new_command = if cfg!(windows) {
             info!("exe not found, try cmd");
             Command::new("ppp.cmd")
@@ -162,22 +188,27 @@ fn run(config_path: &Path, args: &[String]) {
         command.get_args().for_each(|arg| {
             new_command.arg(arg);
         });
-        let res = new_command.spawn();
-        res.die_with(|err| format!("Failed to start command: {}", err));
+        let status = new_command
+            .spawn()
+            .die_with(|err| format!("Failed to start command: {}", err))
+            .wait()
+            .die_with(|err| format!("Failed to execute command: {}", err));
+        info!("running status: {:?}", status);
     }
 }
 
 /// make a permanent tempdir.
-fn temp_dir() -> std::io::Result<PathBuf> {
+#[once]
+fn temp_dir() -> PathBuf {
     let path = env::temp_dir().join("openppp2");
-    fs::create_dir_all(&path)?;
-    Ok(path)
+    fs::create_dir_all(&path).expect("create temp dir failed");
+    path
 }
 
 fn write_direct_list() -> std::io::Result<PathBuf> {
     let compressed_bytes = include_bytes!(concat!(env!("OUT_DIR"), "/direct-list.zst"));
     let decoded = zstd::stream::decode_all(Cursor::new(compressed_bytes)).unwrap();
-    let path = temp_dir()?.join("direct-list.txt");
+    let path = temp_dir().join("direct-list.txt");
     let mut file = File::create(&path)?;
     file.write_all(&decoded)?;
     Ok(path)

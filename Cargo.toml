@@ -1,34 +1,34 @@
 [package]
-name = "openppp2-client"
-version = "0.1.2"
 edition = "2021"
+name    = "openppp2-client"
+version = "0.2.0"
 
 [dependencies]
-die-exit = { version = "0.5.0", features = ["red"] }
+anyhow            = "1.0.94"
+clap              = { version = "4.5.23", features = ["derive"] }
+colored           = "2.1.0"
+config-file2      = "0.4.0"
+die-exit          = { version = "0.5.0", features = ["red"] }
+glob              = "0.3.1"
+home              = "0.5.9"
+json              = "0.12.4"
+log               = "0.4.22"
+once-fn           = "0.2.0"
+path-absolutize   = "3.1.1"
+pretty_env_logger = "0.5.0"
+serde             = { version = "1.0.216", features = ["derive"] }
+terminal-menu     = "3.0.0"
+toml              = "0.8.19"
+zstd              = "0.13.2"
 # network-interface = "1.1.3"
 # protobuf = "3.4.0"
-terminal-menu = "3.0.0"
-json = "0.12.4"
-clap = { version = "4.5.4", features = ["derive"] }
-colored = "2.1.0"
-once_cell = "1.19.0"
-log = "0.4.21"
-env_logger = "0.11.3"
-serde = { version = "1.0.198", features = ["derive"] }
-toml = "0.8.12"
-zstd = "0.13.1"
-home = "0.5.9"
 
 [build-dependencies]
-zstd = "0.13.1"
-
-[[bin]]
-name = "ppp-client"
-path = "src/main.rs"
+zstd = "0.13.2"
 
 [profile.release]
-opt-level = "z"
-strip = true
-lto = true
 codegen-units = 1
-panic = "abort"
+lto           = true
+opt-level     = "z"
+panic         = "abort"
+strip         = true

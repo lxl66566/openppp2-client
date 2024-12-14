@@ -1,6 +1,6 @@
 # openppp2-client
 
-一个简陋的、非官方的 [openppp2](https://github.com/liulilittle/openppp2) 客户端，主要用于切换多个配置。
+一个简陋的、非官方的 [openppp2](https://github.com/liulilittle/openppp2) 客户端，主要用于**切换多个配置**与**使用默认配置**。
 
 ## 安装
 
@@ -8,7 +8,7 @@
 
 ## 配置与使用
 
-需要保证环境变量或执行目录存在 openppp2 的可执行文件/启动脚本。
+需要保证环境变量或执行目录存在 openppp2 的可执行文件，且名称为 `ppp`（或 `ppp.exe`, `ppp.cmd`, `ppp.sh`）。
 
 配置说明：
 
@@ -35,6 +35,8 @@ name = "example2"
 ip = "127.0.0.1"
 port = 2888
 ```
+
+如果你不想看到 TUI 面板而希望通过命令行直接启动 openppp2，请查看帮助。`openppp2-client -h`
 
 ## TODO
 

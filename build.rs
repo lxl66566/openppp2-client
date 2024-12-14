@@ -1,7 +1,5 @@
-use std::env;
-use std::fs::File;
-use std::io::Write;
-use std::path::Path;
+use std::{env, fs::File, io::Write, path::Path};
+
 use zstd::stream::write::Encoder;
 
 fn main() {
