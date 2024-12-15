@@ -20,6 +20,9 @@ pub struct ClientConfig {
     /// file.
     #[serde(default)]
     pub default_port_for_ssh: u16,
+    /// Whether to enable chnroutes by default.
+    #[serde(default)]
+    pub enable_chnroutes_by_default: bool,
 }
 
 /// the name, ip and port of default openppp2 config.
@@ -98,6 +101,7 @@ impl Default for ClientConfig {
             .map(|s| s.to_string())
             .collect(),
             default_port_for_ssh: 80,
+            enable_chnroutes_by_default: false,
         }
     }
 }

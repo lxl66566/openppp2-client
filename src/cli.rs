@@ -12,6 +12,9 @@ pub struct Cli {
     #[arg(long)]
     #[clap(default_value_t = true)]
     pub parse_ssh_config: bool,
+    /// Whether to use chnroutes to direct traffic in China.
+    #[arg(short, long)]
+    pub enable_chnroutes: bool,
     /// The subcommand.
     #[command(subcommand)]
     pub subcommand: Option<SubCommand>,

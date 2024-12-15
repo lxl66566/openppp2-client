@@ -21,6 +21,7 @@ use config_file2::{LoadConfigFile, StoreConfigFile};
 use log::{debug, info, warn};
 use once_fn::once;
 use path_absolutize::Absolutize;
+use pollster::FutureExt;
 use ssh_parser::get_config_items_from_ssh_config;
 use utils::Unzip;
 
@@ -94,7 +95,20 @@ fn main() -> anyhow::Result<()> {
         }
     };
     debug!("run ppp use config file: {}", config_path.display());
-    run(config_path, &client_config.args)
+    if CLI.enable_chnroutes || client_config.enable_chnroutes_by_default {
+        chnroutes::up(&Default::default())
+            .block_on()
+            .context("chnroutes up failed")?;
+
+        run(config_path, &client_config.args)?;
+
+        chnroutes::down(&Default::default())
+            .block_on()
+            .context("chnroutes down failed")?;
+    } else {
+        run(config_path, &client_config.args)?;
+    }
+    Ok(())
 }
 
 /// Returns all config files and their names in the given config dirs.
@@ -189,38 +203,29 @@ fn run(config_path: &Path, args: &[String]) -> anyhow::Result<()> {
     let content = fs::read_to_string(config_path).expect("read config file failed");
     debug!("config file content: {}", content);
 
-    let mut command = Command::new("ppp");
-    let args: Vec<&String> = args.iter().collect();
-    command.args(&args);
-    command.arg(format!("--config={}", config_path.to_string_lossy()));
-    if let Ok(direct_list) = write_direct_list() {
-        command.arg(format!("--dns-rules={}", direct_list.to_string_lossy()));
-    }
+    for exe in ["ppp", "ppp.cmd", "ppp.sh"] {
+        let mut command = Command::new(exe);
+        let args: Vec<&String> = args.iter().collect();
+        command.args(&args);
+        command.arg(format!("--config={}", config_path.to_string_lossy()));
+        if let Ok(direct_list) = write_direct_list() {
+            command.arg(format!("--dns-rules={}", direct_list.to_string_lossy()));
+        }
 
-    info!("Running: `{:?}`", command);
-    let status = command.spawn();
+        info!("Running: `{:?}`", command);
+        let status = command.spawn();
 
-    // if NotFound, try other extension.
-    if status.is_err() && status.unwrap_err().kind() == std::io::ErrorKind::NotFound {
-        let mut new_command = if cfg!(windows) {
-            info!("exe not found, try cmd");
-            Command::new("ppp.cmd")
-        } else {
-            info!("ppp not found, try sh");
-            Command::new("ppp.sh")
-        };
-
-        command.get_args().for_each(|arg| {
-            new_command.arg(arg);
-        });
-        // wait for the process only on unix-like system.
-        if cfg!(windows) {
-            let s = new_command.spawn()?;
-            info!("running status: {:?}", s);
-        } else {
-            let s = new_command.spawn()?.wait()?;
-            info!("exit status: {:?}", s);
-        };
+        // if NotFound, try other extension.
+        match status {
+            Ok(mut child) => {
+                info!("exit status: {:?}", child.wait()?)
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                warn!("{exe} not found, try other ppp extension");
+                continue;
+            }
+            Err(e) => return Err(e.into()),
+        }
     }
     Ok(())
 }
