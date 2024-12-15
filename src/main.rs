@@ -197,8 +197,14 @@ fn run(config_path: &Path, args: &[String]) -> anyhow::Result<()> {
         command.get_args().for_each(|arg| {
             new_command.arg(arg);
         });
-        let status = new_command.spawn()?.wait()?;
-        info!("running status: {:?}", status);
+        // wait for the process only on unix-like system.
+        if cfg!(windows) {
+            let s = new_command.spawn()?;
+            info!("running status: {:?}", s);
+        } else {
+            let s = new_command.spawn()?.wait()?;
+            info!("exit status: {:?}", s);
+        };
     }
     Ok(())
 }
