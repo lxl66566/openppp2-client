@@ -1,13 +1,15 @@
 pub mod cli;
 pub mod client_config;
+pub mod ssh_parser;
 pub mod utils;
 
 use std::{
-    env, fs,
-    fs::File,
+    env,
+    fs::{self, File},
     io::{Cursor, Write},
     path::{Path, PathBuf},
     process::Command,
+    sync::LazyLock as Lazy,
 };
 
 use anyhow::Context;
@@ -19,7 +21,10 @@ use config_file2::{LoadConfigFile, StoreConfigFile};
 use log::{debug, info, warn};
 use once_fn::once;
 use path_absolutize::Absolutize;
+use ssh_parser::get_config_items_from_ssh_config;
 use utils::Unzip;
+
+static DEFAULT_DUMP_POSITION: Lazy<PathBuf> = Lazy::new(|| temp_dir().join("Default.json"));
 
 fn main() -> anyhow::Result<()> {
     utils::log_init();
@@ -40,14 +45,14 @@ fn main() -> anyhow::Result<()> {
         ClientConfig::default()
     });
 
-    // If provide the use param
+    // If provide the `use` param
     if let Some(subcommand) = &CLI.subcommand {
         match subcommand {
             cli::SubCommand::Use { config } => {
                 if let Some(config_item) = DefaultConfigItem::parse(config) {
                     let config_path =
                         dumped_default_settings(config_item.ip.as_str(), config_item.port);
-                    run(&config_path, &client_config.args)?;
+                    run(config_path, &client_config.args)?;
                 } else {
                     run(Path::new(config), &client_config.args)?;
                 }
@@ -64,21 +69,15 @@ fn main() -> anyhow::Result<()> {
     let config_path = match selected_index {
         // selected `Default`
         Some(0) => {
-            let defaults_string: Vec<String> = client_config
-                .defaults
-                .iter()
-                .map(|x| x.to_string())
-                .collect();
-            let selected_index = select(&defaults_string).unwrap_or_else(|| std::process::exit(0));
-            let select_ip_and_port = client_config
-                .defaults
-                .get(selected_index)
-                .expect("the selected index must be valid");
-            info!(
-                "default select index: {}, ip and port: {}",
-                selected_index, select_ip_and_port
-            );
-            dumped_default_settings(select_ip_and_port.ip.as_str(), select_ip_and_port.port)
+            let mut defaults = client_config.defaults.clone();
+            if CLI.parse_ssh_config {
+                match get_config_items_from_ssh_config(None, client_config.default_port_for_ssh) {
+                    Ok(items) => defaults.extend(items),
+                    Err(e) => warn!("parse ssh config failed: {e:?}, do not use ssh config items."),
+                }
+            }
+            let selected = select_t(defaults).unwrap_or_else(|| std::process::exit(0));
+            dumped_default_settings(selected.ip.as_str(), selected.port)
         }
         None => {
             std::process::exit(0);
@@ -91,11 +90,11 @@ fn main() -> anyhow::Result<()> {
                 file_name,
                 selected_file_path.display()
             );
-            selected_file_path.to_owned()
+            selected_file_path
         }
     };
-    debug!("use config file: {}", config_path.display());
-    run(&config_path, &client_config.args)
+    debug!("run ppp use config file: {}", config_path.display());
+    run(config_path, &client_config.args)
 }
 
 /// Returns all config files and their names in the given config dirs.
@@ -131,11 +130,13 @@ fn default_settings(ip: &str, port: u16) -> json::JsonValue {
 /// # Returns
 ///
 /// The path of the dumped file.
-fn dumped_default_settings(ip: &str, port: u16) -> PathBuf {
-    let defaults_file = temp_dir().join("Default.json");
-    fs::write(&defaults_file, default_settings(ip, port).dump())
-        .expect("write default settings failed");
-    defaults_file
+fn dumped_default_settings(ip: &str, port: u16) -> &'static Path {
+    fs::write(
+        DEFAULT_DUMP_POSITION.as_path(),
+        default_settings(ip, port).dump(),
+    )
+    .expect("write default settings failed");
+    DEFAULT_DUMP_POSITION.as_path()
 }
 
 /// Returns the index of selected item. If select `Exit`, return None.
@@ -161,6 +162,21 @@ fn select(items: &[String]) -> Option<usize> {
     } else {
         None
     }
+}
+
+/// Returns the selected item from the given items.
+fn select_t<T: std::fmt::Display>(items: Vec<T>) -> Option<T> {
+    let items_name = items
+        .iter()
+        .map(|x| format!("{}", x).replace("\n", ""))
+        .collect::<Vec<_>>();
+    let selected_index = select(&items_name)?;
+    Some(
+        items
+            .into_iter()
+            .nth(selected_index)
+            .expect("the selected index must be valid"),
+    )
 }
 
 /// run openppp2 with given config file and running args.

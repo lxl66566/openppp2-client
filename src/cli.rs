@@ -8,6 +8,10 @@ pub struct Cli {
     /// The config file path for openppp2-client.
     #[arg(short, long)]
     pub config: Option<PathBuf>,
+    /// Whether to parse the ssh config file.
+    #[arg(long)]
+    #[clap(default_value_t = true)]
+    pub parse_ssh_config: bool,
     /// The subcommand.
     #[command(subcommand)]
     pub subcommand: Option<SubCommand>,

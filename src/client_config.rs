@@ -16,10 +16,14 @@ pub struct ClientConfig {
     pub defaults: Vec<DefaultConfigItem>,
     pub config_dirs: Vec<PathBuf>,
     pub args: Vec<String>,
+    /// The default port for [`DefaultConfigItem`]s that get from ssh config
+    /// file.
+    #[serde(default)]
+    pub default_port_for_ssh: u16,
 }
 
 /// the name, ip and port of default openppp2 config.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DefaultConfigItem {
     pub name: String,
     pub ip: String,
@@ -93,6 +97,7 @@ impl Default for ClientConfig {
             .into_iter()
             .map(|s| s.to_string())
             .collect(),
+            default_port_for_ssh: 80,
         }
     }
 }
