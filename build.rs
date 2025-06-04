@@ -16,9 +16,8 @@ fn main() {
 }
 
 fn compress_to(input: &[u8], output: impl AsRef<Path>) {
-    let mut encoder = Encoder::new(Vec::new(), 22).unwrap();
+    let f = File::create(output).unwrap();
+    let mut encoder = Encoder::new(f, 22).unwrap();
     encoder.write_all(input).unwrap();
-    let compressed_bytes = encoder.finish().unwrap();
-    let mut f = File::create(output).unwrap();
-    f.write_all(&compressed_bytes).unwrap();
+    encoder.finish().unwrap();
 }
