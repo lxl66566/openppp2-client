@@ -93,9 +93,11 @@ impl Default for ClientConfig {
                 "--tun-gw=10.0.0.0",
                 "--tun-mask=24",
                 "--tun-host=yes",
+                "--tun-flash=yes",
                 "--tun-vnet=yes",
                 "--block-quic=yes",
-                "--set-http-proxy=no",
+                "--set-http-proxy=yes",
+                "--tun-mux=4",
             ]
             .into_iter()
             .map(|s| s.to_string())

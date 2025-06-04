@@ -3,16 +3,22 @@ use std::{env, fs::File, io::Write, path::Path};
 use zstd::stream::write::Encoder;
 
 fn main() {
-    println!("cargo:rerun-if-changed=build.rs,direct-list.txt");
+    println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=dns-rules.txt");
+    println!("cargo:rerun-if-changed=ip.txt");
     let out_dir = env::var("OUT_DIR").unwrap();
-    let dest_path = Path::new(&out_dir).join("direct-list.zst");
 
+    let dest_path = Path::new(&out_dir).join("dns-rules.zst");
+    compress_to(include_bytes!("dns-rules.txt"), dest_path);
+
+    let dest_path = Path::new(&out_dir).join("ip.zst");
+    compress_to(include_bytes!("ip.txt"), dest_path);
+}
+
+fn compress_to(input: &[u8], output: impl AsRef<Path>) {
     let mut encoder = Encoder::new(Vec::new(), 22).unwrap();
-    encoder
-        .write_all(include_bytes!("direct-list.txt"))
-        .unwrap();
+    encoder.write_all(input).unwrap();
     let compressed_bytes = encoder.finish().unwrap();
-
-    let mut f = File::create(dest_path).unwrap();
+    let mut f = File::create(output).unwrap();
     f.write_all(&compressed_bytes).unwrap();
 }

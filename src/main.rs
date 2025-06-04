@@ -4,9 +4,7 @@ pub mod ssh_parser;
 pub mod utils;
 
 use std::{
-    env,
-    fs::{self, File},
-    io::{Cursor, Write},
+    env, fs,
     path::{Path, PathBuf},
     process::Command,
     sync::LazyLock as Lazy,
@@ -26,6 +24,18 @@ use ssh_parser::get_config_items_from_ssh_config;
 use utils::Unzip;
 
 static DEFAULT_DUMP_POSITION: Lazy<PathBuf> = Lazy::new(|| temp_dir().join("Default.json"));
+
+/// decompress the prebuilt zst file and write to a temp file.
+macro_rules! write_prebuilt_zstd {
+    ($zst_filename:expr, $output_path:expr) => {{
+        let compressed_bytes = include_bytes!(concat!(env!("OUT_DIR"), "/", $zst_filename));
+        let file = std::fs::File::create(&$output_path).expect("create temp file failed");
+        let mut decoder = zstd::stream::Decoder::new(std::io::Cursor::new(compressed_bytes))
+            .expect("zstd decoder create failed");
+        let mut writer = std::io::BufWriter::new(file);
+        std::io::copy(&mut decoder, &mut writer).map(|_| $output_path)
+    }};
+}
 
 fn main() -> anyhow::Result<()> {
     utils::log_init();
@@ -208,8 +218,13 @@ fn run(config_path: &Path, args: &[String]) -> anyhow::Result<()> {
         let args: Vec<&String> = args.iter().collect();
         command.args(&args);
         command.arg(format!("--config={}", config_path.to_string_lossy()));
-        if let Ok(direct_list) = write_direct_list() {
-            command.arg(format!("--dns-rules={}", direct_list.to_string_lossy()));
+        // if let Ok(direct_list) =
+        //     write_prebuilt_zstd!("dns-rules.zst", temp_dir().join("dns-rules.txt"))
+        // {
+        //     command.arg(format!("--dns-rules={}", direct_list.to_string_lossy()));
+        // }
+        if let Ok(ip_list) = write_prebuilt_zstd!("ip.zst", temp_dir().join("ip.txt")) {
+            command.arg(format!("--bypass-iplist={}", ip_list.to_string_lossy()));
         }
 
         info!("Running: `{:?}`", command);
@@ -236,14 +251,4 @@ fn temp_dir() -> PathBuf {
     let path = env::temp_dir().join("openppp2");
     fs::create_dir_all(&path).expect("create temp dir failed");
     path
-}
-
-/// Write the direct-list.txt to a temp file.
-fn write_direct_list() -> std::io::Result<PathBuf> {
-    let compressed_bytes = include_bytes!(concat!(env!("OUT_DIR"), "/direct-list.zst"));
-    let decoded = zstd::stream::decode_all(Cursor::new(compressed_bytes)).unwrap();
-    let path = temp_dir().join("direct-list.txt");
-    let mut file = File::create(&path)?;
-    file.write_all(&decoded)?;
-    Ok(path)
 }
