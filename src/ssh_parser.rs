@@ -17,11 +17,10 @@ pub fn get_config_items_from_ssh_config(
     default_port: u16,
 ) -> Result<Vec<DefaultConfigItem>> {
     let mut path = None;
-    if let Some(config_file_path) = config_file_path {
-        if config_file_path.exists() {
+    if let Some(config_file_path) = config_file_path
+        && config_file_path.exists() {
             path = Some(config_file_path);
         }
-    }
     let content = if let Some(path) = path {
         fs::read_to_string(path)?
     } else {
@@ -49,7 +48,7 @@ pub fn get_config_items_from_ssh_config(
             });
         }
     }
-    debug!("ssh config items: {:?}", items);
+    debug!("ssh config items: {items:?}");
     Ok(items)
 }
 

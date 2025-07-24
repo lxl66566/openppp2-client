@@ -13,7 +13,7 @@ use std::{
 use anyhow::Context;
 use assert2::assert;
 use cli::CLI;
-use client_config::{ClientConfig, DefaultConfigItem, DEFAULT_CLIENT_CONFIG_PATH};
+use client_config::{ClientConfig, DEFAULT_CLIENT_CONFIG_PATH, DefaultConfigItem};
 use colored::Colorize;
 use config_file2::{LoadConfigFile, StoreConfigFile};
 use log::{debug, info, warn};
@@ -47,8 +47,7 @@ fn main() -> anyhow::Result<()> {
     // Get the config, otherwise store one to the default path.
     let client_config = config.unwrap_or_else(|| {
         warn!(
-            "config file not found, use default config and write to {:?}.",
-            DEFAULT_CLIENT_CONFIG_PATH
+            "config file not found, use default config and write to {DEFAULT_CLIENT_CONFIG_PATH:?}."
         );
         ClientConfig::default()
             .store(DEFAULT_CLIENT_CONFIG_PATH.as_path())
@@ -75,7 +74,7 @@ fn main() -> anyhow::Result<()> {
     let (json_files, mut file_names) = read_openppp2_settings(&client_config.config_dirs)?.unzip();
     file_names.insert(0, "Default".to_string());
     let selected_index = select(&file_names);
-    debug!("selected_index: {:?}", selected_index);
+    debug!("selected_index: {selected_index:?}");
 
     let config_path = match selected_index {
         // selected `Default`
@@ -192,7 +191,7 @@ fn select(items: &[String]) -> Option<usize> {
 fn select_t<T: std::fmt::Display>(items: Vec<T>) -> Option<T> {
     let items_name = items
         .iter()
-        .map(|x| format!("{}", x).replace("\n", ""))
+        .map(|x| format!("{x}").replace("\n", ""))
         .collect::<Vec<_>>();
     let selected_index = select(&items_name)?;
     Some(
@@ -211,7 +210,7 @@ fn run(config_path: &Path, args: &[String]) -> anyhow::Result<()> {
         config_path
     );
     let content = fs::read_to_string(config_path).expect("read config file failed");
-    debug!("config file content: {}", content);
+    debug!("config file content: {content}");
 
     for exe in ["ppp", "ppp.cmd", "ppp.sh"] {
         let mut command = Command::new(exe);
@@ -223,11 +222,13 @@ fn run(config_path: &Path, args: &[String]) -> anyhow::Result<()> {
         // {
         //     command.arg(format!("--dns-rules={}", direct_list.to_string_lossy()));
         // }
-        if let Ok(ip_list) = write_prebuilt_zstd!("ip.zst", temp_dir().join("ip.txt")) {
+        if let Ok(ip_list) = write_prebuilt_zstd!("ip.zst", temp_dir().join("ip.txt"))
+            && CLI.bypass_iplist
+        {
             command.arg(format!("--bypass-iplist={}", ip_list.to_string_lossy()));
         }
 
-        info!("Running: `{:?}`", command);
+        info!("Running: `{command:?}`");
         let status = command.spawn();
 
         // if NotFound, try other extension.

@@ -11,10 +11,14 @@ pub struct Cli {
     /// Whether to parse the ssh config file.
     #[arg(long)]
     #[clap(default_value_t = true)]
-    pub parse_ssh_config: bool,
+    pub parse_ssh_config: std::primitive::bool,
     /// Whether to use chnroutes to direct traffic in China.
     #[arg(short, long)]
     pub enable_chnroutes: bool,
+    /// Whether to use iplist bypassing.
+    #[arg(short, long)]
+    #[clap(default_value_t = true)]
+    pub bypass_iplist: std::primitive::bool,
     /// The subcommand.
     #[command(subcommand)]
     pub subcommand: Option<SubCommand>,

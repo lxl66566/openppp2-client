@@ -13,6 +13,7 @@ pub static DEFAULT_CLIENT_CONFIG_PATH: Lazy<PathBuf> = Lazy::new(|| {
 /// The config for openppp2 client.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClientConfig {
+    #[serde(default)]
     pub defaults: Vec<DefaultConfigItem>,
     pub config_dirs: Vec<PathBuf>,
     pub args: Vec<String>,
